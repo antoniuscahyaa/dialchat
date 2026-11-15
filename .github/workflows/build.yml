@@ -1,1 +1,44 @@
+name: Build APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Bongkar project.zip
+        run: unzip -q -o project.zip -d src
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Siapkan keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.keystore_base64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Secret keystore_base64 belum diisi"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build APK release (bertanda tangan)
+        working-directory: src
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.keystore_password }}
+          KEY_PASSWORD: ${{ secrets.key_password }}
+          KEY_ALIAS: ${{ secrets.key_alias }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DialChat-APK
+          path: src/app/build/outputs/apk/release/*.apk
